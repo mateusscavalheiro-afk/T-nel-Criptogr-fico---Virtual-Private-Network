@@ -615,7 +615,7 @@
 
             // 2. Vai até o Servidor VPN
             const timeToServer = 800;
-            const latency = isVPNOn ? 2500 : 0; 
+            const latency = isVPNOn ? 3500 : 0; 
             packet.style.transition = `left ${timeToServer + latency}ms linear`;
             progressBar.style.transition = `width ${timeToServer + latency}ms linear`;
             packet.style.left = '68%';
