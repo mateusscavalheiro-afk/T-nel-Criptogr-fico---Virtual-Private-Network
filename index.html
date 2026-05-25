@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal VPN - Simulador Completo</title>
+    <style>
+        :root {
+            --bg-dark: #050505;
+            --primary: #3498db;
+            --success: #2ecc71;
+            --danger: #e74c3c;
+            --text: #ecf0f1;
+            --terminal-bg: #111116;
+        }
+
+        body {
+            background-color: #000;
+            color: var(--text);
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .os-window {
+            width: 1050px;
+            background: var(--terminal-bg);
+            border-radius: 10px;
+            border: 1px solid #333;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.9);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .os-header {
+            background: #222; padding: 10px 15px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #111;
+        }
+        .os-dot { width: 12px; height: 12px; border-radius: 50%; }
+        .dot-red { background: #ff5f56; } .dot-yellow { background: #ffbd2e; } .dot-green { background: #27c93f; }
+
+        .os-content { padding: 30px; display: flex; flex-direction: column; align-items: center; }
+
+        /* Controles */
+        .controls {
+            background: #1a1a24; padding: 15px 25px; border-radius: 8px; display: flex; gap: 20px;
+            align-items: center; margin-bottom: 30px; border: 1px solid #333; z-index: 10;
+        }
+        input[type="text"] {
+            padding: 12px; border-radius: 6px; border: 1px solid #555; background: #0a0a0a;
+            color: var(--success); font-family: monospace; width: 250px; font-size: 14px;
+        }
+        button.send-btn {
+            padding: 12px 24px; border: none; border-radius: 6px; background-color: var(--primary);
+            color: white; cursor: pointer; font-weight: bold; font-size: 14px; transition: background 0.3s;
+        }
+        button.send-btn:hover { background-color: #2980b9; }
+        button.send-btn:disabled { background-color: #555; cursor: not-allowed; }
+
+        /* Toggle Customizado VPN */
+        .vpn-control {
+            display: flex; align-items: center; gap: 15px; background: #0a0a0a; padding: 10px 15px;
+            border-radius: 8px; border: 1px solid #444; cursor: pointer; user-select: none;
+        }
+        .vpn-status-text { font-weight: bold; width: 100px; text-align: center; }
+        .encapsulation-visual { position: relative; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; }
+        .data-doc { font-size: 24px; transition: all 0.5s ease; z-index: 2; }
+        .capsule {
+            position: absolute; width: 100%; height: 100%; border: 2px solid var(--success); border-radius: 50%;
+            background: rgba(46, 204, 113, 0.2); opacity: 0; transform: scale(1.5); transition: all 0.5s ease;
+            box-shadow: 0 0 10px var(--success); z-index: 1;
+        }
+        .vpn-control.active .capsule { opacity: 1; transform: scale(1); }
+        .vpn-control.active .data-doc { transform: scale(0.7); }
+        .vpn-control.active .vpn-status-text { color: var(--success); }
+        .vpn-control:not(.active) .vpn-status-text { color: var(--danger); }
+        .vpn-control:not(.active) .data-doc { transform: rotate(-15deg); filter: grayscale(100%); opacity: 0.7;}
+
+        /* Palco Principal */
+        .stage {
+            position: relative; width: 100%; height: 400px; background: var(--bg-dark);
+            border-radius: 12px; border: 2px solid #222; display: flex; justify-content: space-between;
+            align-items: center; padding: 0 50px; box-sizing: border-box; overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.9);
+        }
+        .node { display: flex; flex-direction: column; align-items: center; z-index: 2; width: 120px; text-align: center; }
+        .icon { font-size: 60px; margin-bottom: 10px; }
+        .node-name { font-weight: bold; font-size: 16px; color: #888; }
+        
+        /* Servidor VPN (Intermediário) */
+        .vpn-server-node {
+            position: absolute; left: 68%; top: 50%; transform: translateY(-50%);
+            display: flex; flex-direction: column; align-items: center; z-index: 1;
+            opacity: 0.1; transition: opacity 0.5s;
+        }
+        .vpn-server-node.active { opacity: 1; }
+        .vpn-server-node .icon { filter: drop-shadow(0 0 15px var(--success)); }
+
+        .server-msg { margin-top: 15px; font-size: 14px; min-height: 20px; font-weight: bold; opacity: 1; transition: opacity 0.5s; }
+
+        /* Pacote */
+        .packet-container {
+            position: absolute; top: 50%; left: 110px; transform: translateY(-50%);
+            display: flex; align-items: center; justify-content: center; opacity: 0; z-index: 5;
+            transition: left 0.5s linear, opacity 0.3s;
+        }
+        .packet-icon { font-size: 30px; }
+        .packet-capsule {
+            position: absolute; width: 50px; height: 50px; border-radius: 50%;
+            border: 3px dashed var(--success); background: rgba(46, 204, 113, 0.2);
+            animation: spin 3s linear infinite; display: none;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        
+        .alert-symbol {
+            position: absolute; top: -40px; left: 50%; transform: translateX(-50%) scale(0);
+            color: var(--danger); font-size: 50px; font-weight: bold; font-family: impact, sans-serif;
+            text-shadow: 0 0 10px red; opacity: 0; z-index: 10; transition: transform 0.1s ease, opacity 0.1s;
+        }
+        .alert-symbol.show { transform: translateX(-50%) scale(1); opacity: 1; }
+
+        /* Barra de Progresso */
+        .progress-container {
+            position: absolute; bottom: 30px; left: 130px; right: 130px; height: 4px; background: #222; border-radius: 2px;
+        }
+        .progress-bar { height: 100%; width: 0%; background: var(--primary); transition: width 0.5s linear, background 0.3s; }
+
+        /* Modais */
+        .modal-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 20;
+            display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .modal-overlay.show { opacity: 1; pointer-events: auto; }
+
+        /* Modais de Cripto / Descripto */
+        .crypto-modal {
+            background: #111; border: 2px solid #333; border-radius: 12px; width: 500px; padding: 30px; text-align: center; display: none;
+        }
+        .crypto-text { color: #aaa; font-size: 15px; margin-bottom: 25px; line-height: 1.5; }
+        .slot-machine {
+            background: #000; border: 2px solid var(--success); padding: 20px; font-family: monospace; font-size: 18px;
+            color: var(--success); border-radius: 8px; margin-bottom: 25px; min-height: 25px; word-break: break-all; letter-spacing: 2px;
+        }
+        .btn-confirm {
+            background: var(--success); color: #000; border: none; padding: 10px 25px; font-weight: bold; border-radius: 5px;
+            cursor: pointer; opacity: 0; pointer-events: none; transition: opacity 0.3s; margin: 0 5px;
+        }
+        .btn-confirm.show { opacity: 1; pointer-events: auto; }
+
+        /* Pokemon / Ladrão Popup */
+        .pokemon-popup {
+            width: 450px; background: #fff; border: 6px solid #333; border-radius: 10px;
+            box-shadow: 0 0 0 4px #fff, 0 0 20px rgba(0,0,0,0.8); display: none; flex-direction: column; overflow: hidden;
+        }
+        .popup-header { background: #f0f0f0; padding: 15px; text-align: center; border-bottom: 4px solid #333; }
+        .thief-icon { font-size: 80px; animation: bounce 0.5s infinite alternate; }
+        @keyframes bounce { from { transform: translateY(0); } to { transform: translateY(-15px); } }
+        .popup-dialog {
+            background: #fff; padding: 20px; min-height: 80px; color: #000; font-family: 'Courier New', monospace;
+            font-weight: bold; font-size: 16px; line-height: 1.4;
+        }
+
+        /* Boss / Sucesso Popup */
+        .boss-popup {
+            width: 450px; background: #fff; border: 6px solid #2ecc71; border-radius: 10px; display: none;
+            box-shadow: 0 0 0 2px #8d8a8a, 0 0 30px rgba(46, 204, 113, 0.6); flex-direction: column; overflow: hidden; position: relative;
+        }
+        .boss-header { background: #e8f8f5; padding: 15px; text-align: center; border-bottom: 4px solid #2ecc71; }
+        .boss-icon { font-size: 80px; animation: happyJump 0.4s infinite alternate; position: relative; z-index: 2; }
+        @keyframes happyJump { from { transform: translateY(0); } to { transform: translateY(-10px); } }
+        .boss-dialog {
+            background: #fff; padding: 20px; min-height: 80px; color: #000; font-family: 'Segoe UI', sans-serif;
+            font-weight: bold; font-size: 18px; line-height: 1.4; text-align: center; position: relative; z-index: 2;
+        }
+        .btn-boss-close {
+            background: var(--success); color: #fff; border: none; padding: 10px; font-weight: bold; cursor: pointer; z-index: 2;
+        }
+        
+        /* Chuva de Confetes */
+        .confetti-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; pointer-events: none; z-index: 1; }
+        .confetti { position: absolute; font-size: 24px; animation: fall linear forwards; opacity: 0; }
+        @keyframes fall {
+            0% { top: -30px; transform: rotate(0deg); opacity: 1; }
+            100% { top: 110%; transform: rotate(360deg); opacity: 0; }
+        }
+        
+        .flash-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: white; z-index: 15; opacity: 0; pointer-events: none; transition: opacity 0.1s;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="os-window">
+        <div class="os-header">
+            <div class="os-dot dot-red"></div><div class="os-dot dot-yellow"></div><div class="os-dot dot-green"></div>
+        </div>
+        
+        <div class="os-content">
+            <div class="controls">
+                <input type="text" id="dataInput" value="Senha do Banco: 12345">
+                <button id="sendBtn" class="send-btn" onclick="startSimulation()">Enviar Dados</button>
+                
+                <div class="vpn-control" id="vpnToggle" onclick="handleVPNToggleClick()">
+                    <div class="vpn-status-text" id="vpnStatusText">VPN OFF</div>
+                    <div class="encapsulation-visual">
+                        <div class="capsule"></div><div class="data-doc">📄</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stage" id="stage">
+                <div class="flash-overlay" id="flashOverlay"></div>
+                <div class="modal-overlay" id="modalOverlay">
+                    
+                    <div class="crypto-modal" id="cryptoModal">
+                        <h3 style="color: var(--success); margin-top: 0;">Criptografia AES-256 (Ativação)</h3>
+                        <div class="crypto-text">O Túnel VPN está trancando os seus dados com a Chave Pública.</div>
+                        <div class="slot-machine" id="slotMachineText">...</div>
+                        <button class="btn-confirm" id="btnConfirmCrypto" onclick="closeCryptoModal()">Criar Túnel</button>
+                    </div>
+
+                    <div class="crypto-modal" id="decryptModal">
+                        <h3 style="color: var(--primary); margin-top: 0;">Descriptografia RSA (Destino)</h3>
+                        <div class="crypto-text">O Servidor VPN chegou. Agora ele usa a Chave Privada da empresa para destrancar a mensagem antes da entrega.</div>
+                        <div class="slot-machine" style="border-color: var(--primary); color: var(--danger);" id="decryptSlotMachineText">...</div>
+                        
+                        <button class="btn-confirm" style="background: var(--primary); color: #fff;" id="btnStartDecrypt" onclick="runDecryptAnimation()">Descriptografar</button>
+                        <button class="btn-confirm" style="display: none; background: var(--success); color: #000;" id="btnDeliver" onclick="resolveDecryptAndResume()">Entregar Mensagem</button>
+                    </div>
+
+                    <div class="pokemon-popup" id="pokemonPopup">
+                        <div class="popup-header"><div class="thief-icon">🦹‍♂️</div></div>
+                        <div class="popup-dialog" id="dialogText"></div>
+                    </div>
+
+                    <div class="boss-popup" id="bossPopup">
+                        <div class="confetti-container" id="confettiContainer"></div>
+                        <div class="boss-header"><div class="boss-icon">👨‍💼</div></div>
+                        <div class="boss-dialog">"Excelente! Os dados confidenciais chegaram intactos e em segurança!"</div>
+                        <button class="btn-boss-close" onclick="closeBossModal()">Concluir Operação</button>
+                    </div>
+                </div>
+
+                <div class="node"><div class="icon">💻</div><div class="node-name">Seu PC</div></div>
+
+                <div class="vpn-server-node" id="vpnServerNode">
+                    <div class="icon">🛡️</div><div class="node-name" style="color:var(--success);">Servidor VPN</div>
+                </div>
+
+                <div class="packet-container" id="packet">
+                    <div class="alert-symbol" id="alertSymbol">!</div>
+                    <div class="packet-capsule" id="packetCapsule"></div>
+                    <div class="packet-icon">✉️</div>
+                </div>
+
+                <div class="progress-container"><div class="progress-bar" id="progressBar"></div></div>
+
+                <div class="node">
+                    <div class="icon">🏢</div><div class="node-name">Empresa</div>
+                    <div class="server-msg" id="serverDisplay"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- SISTEMA DE ÁUDIO 8-BIT ---
+        let audioCtx;
+        function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+        
+        function playSend() {
+            initAudio(); const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+            osc.type = 'sine'; osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.15);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+        }
+
+        function playAlert() {
+            initAudio(); const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+            osc.type = 'square'; osc.frequency.setValueAtTime(900, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(1800, audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+        }
+
+        function playEncounter() {
+            initAudio(); const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.4);
+            gain.gain.setValueAtTime(0.5, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.4);
+            osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+        }
+
+        function playType() {
+            initAudio(); const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+            osc.type = 'square'; osc.frequency.setValueAtTime(Math.random() * 200 + 600, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+            osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+        }
+
+        function playEvilLaugh() {
+            initAudio(); const notes = [300, 400, 350, 450, 400, 500, 450, 600];
+            notes.forEach((freq, i) => {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'square'; osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime + i * 0.1); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + i * 0.1 + 0.1);
+                osc.connect(gain); gain.connect(audioCtx.destination); osc.start(audioCtx.currentTime + i * 0.1); osc.stop(audioCtx.currentTime + i * 0.1 + 0.1);
+            });
+        }
+
+        function playFrustration() {
+            initAudio(); const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+            osc.type = 'triangle'; osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(150, audioCtx.currentTime + 0.3); osc.frequency.linearRampToValueAtTime(200, audioCtx.currentTime + 0.5);
+            osc.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 1.0);
+            gain.gain.setValueAtTime(0.4, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1.0);
+            osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 1.0);
+        }
+
+        function playSuccessFanfare() {
+            initAudio(); const notes = [523.25, 659.25, 783.99, 1046.50];
+            notes.forEach((freq, i) => {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'square'; osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime + i * 0.15); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + i * 0.15 + 0.15);
+                osc.connect(gain); gain.connect(audioCtx.destination); osc.start(audioCtx.currentTime + i * 0.15); osc.stop(audioCtx.currentTime + i * 0.15 + 0.15);
+            });
+        }
+        // -------------------------------------
+
+        // Elementos
+        const vpnToggleBtn = document.getElementById('vpnToggle');
+        const vpnStatusText = document.getElementById('vpnStatusText');
+        const vpnServerNode = document.getElementById('vpnServerNode');
+        const dataInput = document.getElementById('dataInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const packet = document.getElementById('packet');
+        const packetCapsule = document.getElementById('packetCapsule');
+        const progressBar = document.getElementById('progressBar');
+        const modalOverlay = document.getElementById('modalOverlay');
+        const cryptoModal = document.getElementById('cryptoModal');
+        const decryptModal = document.getElementById('decryptModal');
+        const pokemonPopup = document.getElementById('pokemonPopup');
+        const bossPopup = document.getElementById('bossPopup');
+        const dialogText = document.getElementById('dialogText');
+        const serverDisplay = document.getElementById('serverDisplay');
+        const flashOverlay = document.getElementById('flashOverlay');
+        
+        let isVPNOn = false;
+        let globalEncryptedString = "";
+        let originalTextGlobal = "";
+        let decryptResolve; 
+
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        function generateRandomChars(length) {
+            const chars = '*&%$#@!XyZ0987123?><[]{}ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            let res = '';
+            for (let i = 0; i < length; i++) res += chars.charAt(Math.floor(Math.random() * chars.length));
+            return res;
+        }
+
+        // --- ETAPA 1: LIGAR VPN ---
+        function handleVPNToggleClick() {
+            initAudio(); if (sendBtn.disabled) return; 
+            if (!isVPNOn) {
+                hideAllModals();
+                cryptoModal.style.display = 'block';
+                modalOverlay.classList.add('show');
+                document.getElementById('btnConfirmCrypto').classList.remove('show');
+                runCryptoSlotMachine();
+            } else {
+                isVPNOn = false;
+                vpnToggleBtn.classList.remove('active');
+                vpnStatusText.textContent = 'VPN OFF';
+                vpnServerNode.classList.remove('active');
+            }
+        }
+
+        async function runCryptoSlotMachine() {
+            const txt = dataInput.value.trim() || "Dado Vazio";
+            globalEncryptedString = generateRandomChars(txt.length + 5);
+            const slot = document.getElementById('slotMachineText');
+            slot.style.color = '#fff';
+            
+            for (let i = 0; i < 20; i++) {
+                slot.textContent = generateRandomChars(globalEncryptedString.length);
+                if (i % 3 === 0) playType();
+                await sleep(50);
+            }
+            slot.style.color = 'var(--success)';
+            slot.textContent = globalEncryptedString;
+            playAlert();
+            document.getElementById('btnConfirmCrypto').classList.add('show');
+        }
+
+        function closeCryptoModal() {
+            cryptoModal.style.display = 'none';
+            modalOverlay.classList.remove('show');
+            isVPNOn = true;
+            vpnToggleBtn.classList.add('active');
+            vpnStatusText.textContent = 'VPN ON';
+            vpnServerNode.classList.add('active');
+        }
+
+        function hideAllModals() {
+            cryptoModal.style.display = 'none';
+            decryptModal.style.display = 'none';
+            pokemonPopup.style.display = 'none';
+            bossPopup.style.display = 'none';
+        }
+
+        // --- ETAPA 2: DESCRIPTOGRAFIA ---
+        function waitForDecryptStep() {
+            return new Promise(resolve => { decryptResolve = resolve; });
+        }
+
+        async function runDecryptAnimation() {
+            const btnStart = document.getElementById('btnStartDecrypt');
+            const btnDeliver = document.getElementById('btnDeliver');
+            const slot = document.getElementById('decryptSlotMachineText');
+            
+            // Oculta o botão inicial de Descriptografar
+            btnStart.classList.remove('show');
+            setTimeout(() => btnStart.style.display = 'none', 300);
+            
+            slot.style.color = '#fff';
+
+            // Caça-niquel reverso
+            for (let i = 0; i < 20; i++) {
+                slot.textContent = generateRandomChars(originalTextGlobal.length);
+                if (i % 3 === 0) playType();
+                await sleep(50);
+            }
+
+            slot.style.color = 'var(--primary)';
+            slot.textContent = originalTextGlobal;
+            playSuccessFanfare();
+            
+            // Remove a cápsula
+            packetCapsule.style.display = 'none';
+            
+            // Exibe o botão de Entregar
+            btnDeliver.style.display = 'inline-block';
+            setTimeout(() => btnDeliver.classList.add('show'), 100);
+        }
+
+        function resolveDecryptAndResume() {
+            decryptModal.style.display = 'none';
+            modalOverlay.classList.remove('show');
+            if(decryptResolve) decryptResolve();
+        }
+
+        // --- ETAPA 3: CHEFE ---
+        function shootConfetti() {
+            const container = document.getElementById('confettiContainer');
+            container.innerHTML = '';
+            const emojis = ['🎉', '🎊', '🎈', '✨', '💵'];
+            for(let i=0; i<30; i++) {
+                const el = document.createElement('div');
+                el.className = 'confetti';
+                el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+                el.style.left = Math.random() * 100 + '%';
+                el.style.animationDuration = (Math.random() * 2 + 2) + 's';
+                el.style.animationDelay = (Math.random() * 0.5) + 's';
+                container.appendChild(el);
+            }
+        }
+
+        function closeBossModal() {
+            hideAllModals();
+            modalOverlay.classList.remove('show');
+            vpnToggleBtn.style.pointerEvents = 'auto';
+            sendBtn.disabled = false;
+        }
+
+        // --- UTIL ---
+        async function typeWriterEffect(element, text) {
+            element.innerHTML = '';
+            for (let i = 0; i < text.length; i++) {
+                element.innerHTML += (text.charAt(i) === '\n') ? '<br>' : text.charAt(i);
+                if (text.charAt(i) !== ' ' && text.charAt(i) !== '\n') playType();
+                await sleep(35);
+            }
+        }
+
+        // --- SIMULAÇÃO PRINCIPAL ---
+        async function startSimulation() {
+            initAudio();
+            originalTextGlobal = dataInput.value.trim();
+            if (!originalTextGlobal) return;
+
+            // Reset UI
+            sendBtn.disabled = true;
+            vpnToggleBtn.style.pointerEvents = 'none';
+            serverDisplay.style.opacity = '0'; 
+            progressBar.style.transition = 'none';
+            progressBar.style.width = '0%';
+            progressBar.style.background = isVPNOn ? 'var(--success)' : 'var(--primary)';
+            packet.style.transition = 'none';
+            packet.style.left = '110px';
+            packet.style.opacity = '1';
+            packetCapsule.style.display = isVPNOn ? 'block' : 'none';
+            document.getElementById('alertSymbol').classList.remove('show');
+
+            await sleep(100);
+
+            playSend(); 
+            
+            // 1. Vai até o Hacker
+            const timeToMid = 1200;
+            packet.style.transition = `left ${timeToMid}ms linear`;
+            progressBar.style.transition = `width ${timeToMid}ms linear`;
+            packet.style.left = '50%';
+            progressBar.style.width = '50%';
+            await sleep(timeToMid);
+
+            const alertSym = document.getElementById('alertSymbol');
+            alertSym.classList.add('show');
+            playAlert();
+            await sleep(600);
+            alertSym.classList.remove('show');
+
+            flashOverlay.style.opacity = '1';
+            playEncounter();
+            await sleep(50);
+            flashOverlay.style.opacity = '0';
+            
+            hideAllModals();
+            pokemonPopup.style.display = 'flex';
+            modalOverlay.classList.add('show');
+            
+            await typeWriterEffect(dialogText, "Um HACKER selvagem interceptou a rede!");
+            await sleep(800);
+
+            if (!isVPNOn) {
+                // HACKER VENCE
+                await typeWriterEffect(dialogText, `Hacker abriu o envelope...\n\nHaha! O texto é:\n"${originalTextGlobal}"`);
+                playEvilLaugh();
+                progressBar.style.background = 'var(--danger)';
+                packet.style.opacity = '0';
+                await sleep(3500); 
+                
+                modalOverlay.classList.remove('show');
+                serverDisplay.textContent = "Falha: Dados Roubados.";
+                serverDisplay.style.color = "var(--danger)";
+                serverDisplay.style.opacity = '1';
+                vpnToggleBtn.style.pointerEvents = 'auto';
+                sendBtn.disabled = false;
+                return; 
+            }
+
+            // HACKER PERDE
+            let cryptoToUse = (globalEncryptedString.length >= originalTextGlobal.length) ? globalEncryptedString : generateRandomChars(originalTextGlobal.length + 5);
+            
+            await typeWriterEffect(dialogText, `Hacker tenta ler...\n\nMaldição! Só tem lixo:\n"${cryptoToUse}"`);
+            playFrustration();
+            await sleep(3000); 
+            modalOverlay.classList.remove('show');
+            await sleep(300);
+
+            // 2. Vai até o Servidor VPN
+            const timeToServer = 800;
+            packet.style.transition = `left ${timeToServer}ms linear`;
+            progressBar.style.transition = `width ${timeToServer}ms linear`;
+            packet.style.left = '68%';
+            progressBar.style.width = '68%';
+            await sleep(timeToServer);
+
+            // 3. Popup de Descriptografia (Onde estava o Bug)
+            hideAllModals();
+            decryptModal.style.display = 'block';
+            modalOverlay.classList.add('show');
+            
+            // Reseta botões e texto do modal
+            document.getElementById('decryptSlotMachineText').textContent = cryptoToUse;
+            document.getElementById('decryptSlotMachineText').style.color = 'var(--danger)';
+            
+            const btnStart = document.getElementById('btnStartDecrypt');
+            btnStart.style.display = 'inline-block';
+            btnStart.classList.add('show'); // AQUI ESTAVA A SOLUÇÃO! A classe show faz ele ficar visível.
+            
+            const btnDeliver = document.getElementById('btnDeliver');
+            btnDeliver.style.display = 'none';
+            btnDeliver.classList.remove('show');
+
+            await waitForDecryptStep();
+
+            // 4. Viagem Final
+            const timeToFim = 800;
+            packet.style.transition = `left ${timeToFim}ms linear`;
+            progressBar.style.transition = `width ${timeToFim}ms linear`;
+            packet.style.left = 'calc(100% - 130px)';
+            progressBar.style.width = '100%';
+            await sleep(timeToFim);
+            
+            packet.style.opacity = '0';
+            serverDisplay.textContent = "Mensagem Recebida!";
+            serverDisplay.style.color = "var(--success)";
+            serverDisplay.style.opacity = '1';
+
+            // 5. Popup da Chefia
+            hideAllModals();
+            bossPopup.style.display = 'flex';
+            modalOverlay.classList.add('show');
+            shootConfetti();
+            playSuccessFanfare();
+        }
+    </script>
+</body>
+</html>
