@@ -615,13 +615,18 @@
 
             // 2. Vai até o Servidor VPN
             const timeToServer = 800;
-            packet.style.transition = `left ${timeToServer}ms linear`;
-            progressBar.style.transition = `width ${timeToServer}ms linear`;
+            const latency = isVPNOn ? 2500 : 0; 
+            packet.style.transition = `left ${timeToServer + latency}ms linear`;
+            progressBar.style.transition = `width ${timeToServer + latency}ms linear`;
             packet.style.left = '68%';
             progressBar.style.width = '68%';
-            await sleep(timeToServer);
 
-            // 3. Popup de Descriptografia (Onde estava o Bug)
+            // Mostra mensagem de "Criptografando..." para justificar a demora
+            if(isVPNOn) serverDisplay.textContent = "Processando criptografia..."; 
+
+            await sleep(timeToServer + latency);
+
+            // 3. Popup de Descriptografia
             hideAllModals();
             decryptModal.style.display = 'block';
             modalOverlay.classList.add('show');
