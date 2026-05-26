@@ -88,6 +88,33 @@
             align-items: center; padding: 0 50px; box-sizing: border-box; overflow: hidden;
             box-shadow: inset 0 0 50px rgba(0,0,0,0.9);
         }
+        
+        /* Tráfego de Rede Pública (Fundo) */
+        .network-traffic {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            overflow: hidden; z-index: 0; pointer-events: none;
+        }
+        .traffic-packet {
+            position: absolute; color: #444; font-family: monospace; font-size: 14px;
+            white-space: nowrap; animation: moveTraffic linear forwards;
+        }
+        @keyframes moveTraffic {
+            from { transform: translateX(-150px); }
+            to { transform: translateX(1100px); }
+        }
+
+        /* O Túnel VPN Visual */
+        .visual-tunnel {
+            position: absolute; top: 50%; left: 110px; right: 32%; /* 32% para conectar até o Servidor VPN */
+            height: 80px; transform: translateY(-50%);
+            background: rgba(46, 204, 113, 0.08);
+            border-top: 2px dashed var(--success);
+            border-bottom: 2px dashed var(--success);
+            box-shadow: inset 0 0 20px rgba(46, 204, 113, 0.2), 0 0 15px rgba(46, 204, 113, 0.1);
+            z-index: 1; opacity: 0; transition: opacity 0.5s ease; pointer-events: none;
+        }
+        .visual-tunnel.active { opacity: 1; }
+
         .node { display: flex; flex-direction: column; align-items: center; z-index: 2; width: 120px; text-align: center; }
         .icon { font-size: 60px; margin-bottom: 10px; }
         .node-name { font-weight: bold; font-size: 16px; color: #888; }
@@ -95,7 +122,7 @@
         /* Servidor VPN (Intermediário) */
         .vpn-server-node {
             position: absolute; left: 68%; top: 50%; transform: translateY(-50%);
-            display: flex; flex-direction: column; align-items: center; z-index: 1;
+            display: flex; flex-direction: column; align-items: center; z-index: 2;
             opacity: 0.1; transition: opacity 0.5s;
         }
         .vpn-server-node.active { opacity: 1; }
@@ -127,6 +154,7 @@
         /* Barra de Progresso */
         .progress-container {
             position: absolute; bottom: 30px; left: 130px; right: 130px; height: 4px; background: #222; border-radius: 2px;
+            z-index: 2;
         }
         .progress-bar { height: 100%; width: 0%; background: var(--primary); transition: width 0.5s linear, background 0.3s; }
 
@@ -215,6 +243,11 @@
             </div>
 
             <div class="stage" id="stage">
+                
+                <div class="network-traffic" id="networkTraffic"></div>
+                
+                <div class="visual-tunnel" id="visualTunnel"></div>
+
                 <div class="flash-overlay" id="flashOverlay"></div>
                 <div class="modal-overlay" id="modalOverlay">
                     
@@ -252,7 +285,7 @@
                 <div class="vpn-server-node" id="vpnServerNode">
                     <div class="icon">🛡️</div>
                     <div class="node-name" style="color:var(--success);">Servidor VPN</div>
-                    <div style="font-size: 10px; color: #555; margin-top: 5px; text-align: center; width: 120px;">
+                    <div style="font-size: 10px; color: #555; margin-top: 5px; text-align: center; width: 120px; font-weight: bold;">
                     ISP: Destino visível, conteúdo protegido.
                     </div>
                 </div>
@@ -274,6 +307,36 @@
     </div>
 
     <script>
+        // --- GERADOR DE TRÁFEGO DE REDE (BACKGROUND) ---
+        function spawnNetworkTraffic() {
+            const container = document.getElementById('networkTraffic');
+            const packet = document.createElement('div');
+            packet.className = 'traffic-packet';
+            
+            // Dados aleatórios flutuando
+            const dataTypes = ["[HTTP GET]", "01101001", "user_auth_token", "[PING]", "IMG_092.jpg", "****", "{json: data}"];
+            packet.textContent = dataTypes[Math.floor(Math.random() * dataTypes.length)];
+            
+            // Posição vertical aleatória
+            packet.style.top = Math.random() * 90 + '%';
+            
+            // Velocidade aleatória (3s a 8s)
+            const duration = Math.random() * 5 + 3;
+            packet.style.animationDuration = duration + 's';
+            
+            // Opacidade aleatória para dar profundidade
+            packet.style.opacity = Math.random() * 0.4 + 0.1;
+            
+            container.appendChild(packet);
+            
+            // Remove o elemento após a animação terminar
+            setTimeout(() => { packet.remove(); }, duration * 1000);
+        }
+        // Dispara um novo pacote fantasma a cada 300ms
+        setInterval(spawnNetworkTraffic, 300);
+        // ---------------------------------------------
+
+
         // --- SISTEMA DE ÁUDIO 8-BIT ---
         let audioCtx;
         function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
@@ -333,7 +396,6 @@
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.type = 'square';
-            // Começa agudo e cai para um grave, dando sensação de "fim"
             osc.frequency.setValueAtTime(440, now);
             osc.frequency.exponentialRampToValueAtTime(110, now + 0.5);
             osc.frequency.linearRampToValueAtTime(55, now + 1.2);
@@ -360,7 +422,6 @@
         function playMissionComplete() {
             initAudio();
             const now = audioCtx.currentTime;
-            // Acorde de vitória ascendente rápido
             const notes = [392, 523, 659, 783, 1046, 1318]; 
             
             notes.forEach((freq, i) => {
@@ -384,6 +445,7 @@
         const vpnToggleBtn = document.getElementById('vpnToggle');
         const vpnStatusText = document.getElementById('vpnStatusText');
         const vpnServerNode = document.getElementById('vpnServerNode');
+        const visualTunnel = document.getElementById('visualTunnel');
         const dataInput = document.getElementById('dataInput');
         const sendBtn = document.getElementById('sendBtn');
         const packet = document.getElementById('packet');
@@ -426,6 +488,7 @@
                 vpnToggleBtn.classList.remove('active');
                 vpnStatusText.textContent = 'VPN OFF';
                 vpnServerNode.classList.remove('active');
+                visualTunnel.classList.remove('active'); // Desliga o túnel visual
             }
         }
 
@@ -453,6 +516,7 @@
             vpnToggleBtn.classList.add('active');
             vpnStatusText.textContent = 'VPN ON';
             vpnServerNode.classList.add('active');
+            visualTunnel.classList.add('active'); // Liga o túnel visual (O tubo verde)
         }
 
         function hideAllModals() {
@@ -472,13 +536,11 @@
             const btnDeliver = document.getElementById('btnDeliver');
             const slot = document.getElementById('decryptSlotMachineText');
             
-            // Oculta o botão inicial de Descriptografar
             btnStart.classList.remove('show');
             setTimeout(() => btnStart.style.display = 'none', 300);
             
             slot.style.color = '#fff';
 
-            // Caça-niquel reverso
             for (let i = 0; i < 20; i++) {
                 slot.textContent = generateRandomChars(originalTextGlobal.length);
                 if (i % 3 === 0) playType();
@@ -489,10 +551,8 @@
             slot.textContent = originalTextGlobal;
             playSuccessFanfare();
             
-            // Remove a cápsula
             packetCapsule.style.display = 'none';
             
-            // Exibe o botão de Entregar
             btnDeliver.style.display = 'inline-block';
             setTimeout(() => btnDeliver.classList.add('show'), 100);
         }
@@ -621,7 +681,6 @@
             packet.style.left = '68%';
             progressBar.style.width = '68%';
 
-            // Mostra mensagem de "Criptografando..." para justificar a demora
             if(isVPNOn) serverDisplay.textContent = "Processando criptografia..."; 
 
             await sleep(timeToServer + latency);
@@ -631,13 +690,12 @@
             decryptModal.style.display = 'block';
             modalOverlay.classList.add('show');
             
-            // Reseta botões e texto do modal
             document.getElementById('decryptSlotMachineText').textContent = cryptoToUse;
             document.getElementById('decryptSlotMachineText').style.color = 'var(--danger)';
             
             const btnStart = document.getElementById('btnStartDecrypt');
             btnStart.style.display = 'inline-block';
-            btnStart.classList.add('show'); // AQUI ESTAVA A SOLUÇÃO! A classe show faz ele ficar visível.
+            btnStart.classList.add('show'); 
             
             const btnDeliver = document.getElementById('btnDeliver');
             btnDeliver.style.display = 'none';
